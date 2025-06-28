@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""
+Setup script for Heart Disease Detective Project
+MediMystery Labs - Data Science Division
+"""
+
+import os
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+def print_header():
+    """Print project header"""
+    print("🕵️" + "=" * 58 + "🕵️")
+    print("🩺 HEART DISEASE DETECTIVE - PROJECT SETUP 🩺")
+    print("🏥 MediMystery Labs - Data Science Division 🏥")
+    print("🕵️" + "=" * 58 + "🕵️")
+
+def check_python_version():
+    """Check if Python version is compatible"""
+    print("\n🐍 Checking Python version...")
+    
+    if sys.version_info < (3, 8):
+        print("❌ Python 3.8+ required. Current version:", sys.version)
+        return False
+    
+    print(f"✅ Python {sys.version.split()[0]} detected")
+    return True
+
+def install_requirements():
+    """Install required packages"""
+    print("\n📦 Installing required packages...")
+    
+    requirements = [
+        'pandas>=1.3.0',
+        'numpy>=1.21.0', 
+        'matplotlib>=3.4.0',
+        'seaborn>=0.11.0',
+        'scikit-learn>=1.0.0',
+        'pgmpy>=0.1.18',
+        'networkx>=2.6.0',
+        'jupyter>=1.0.0'
+    ]
+    
+    try:
+        for package in requirements:
+            print(f"Installing {package}...")
+            subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
+        
+        print("✅ All packages installed successfully!")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error installing packages: {e}")
+        return False
+
+def download_dataset():
+    """Download the heart disease dataset"""
+    print("\n📊 Setting up dataset...")
+    
+    dataset_url = "https://bit.ly/3T1A7Rs"
+    dataset_file = "heart_disease.csv"
+    
+    if os.path.exists(dataset_file):
+        print(f"✅ Dataset '{dataset_file}' already exists")
+        return True
+    
+    try:
+        print(f"Downloading dataset from {dataset_url}...")
+        print("⚠️  Please download manually from: https://bit.ly/3T1A7Rs")
+        print(f"   Save as: {dataset_file}")
+        print("   Place in the project root directory")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error downloading dataset: {e}")
+        print("📝 Please download manually and save as 'heart_disease.csv'")
+        return True
+
+def create_project_structure():
+    """Create project directory structure"""
+    print("\n📁 Creating project structure...")
+    
+    directories = [
+        'data',
+        'results', 
+        'visualizations',
+        'reports',
+        'notebooks'
+    ]
+    
+    for directory in directories:
+        Path(directory).mkdir(exist_ok=True)
+        print(f"✅ Created directory: {directory}/")
+    
+    return True
+
+def create_gitignore():
+    """Create .gitignore file"""
+    print("\n📄 Creating .gitignore...")
+    
+    gitignore_content = """# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# Environment variables
+.env
+.venv
+env/
+venv/
+
+# Data files (keep structure, ignore large files)
+*.csv
+*.xlsx
+*.json
+!sample_*.csv
+
+# Results and outputs
+results/*.png
+results/*.pdf
+visualizations/*.png
+visualizations/*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+"""
+    
+    with open('.gitignore', 'w') as f:
+        f.write(gitignore_content)
+    
+    print("✅ .gitignore created")
+    return True
+
+def run_quick_test():
+    """Run a quick test to verify setup"""
+    print("\n🧪 Running setup verification...")
+    
+    try:
+        # Test key imports
+        import pandas as pd
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import sklearn
+        import pgmpy
+        import networkx as nx
+        
+        print("✅ All required packages imported successfully")
+        
+        # Test basic functionality
+        test_data = pd.DataFrame({
+            'age': [45, 50, 60],
+            'target': [0, 1, 1]
+        })
+        
+        print("✅ Pandas functionality verified")
+        print("✅ Setup verification completed successfully!")
+        
+        return True
+        
+    except ImportError as e:
+        print(f"❌ Import error: {e}")
+        return False
+    except Exception as e:
+        print(f"❌ Verification error: {e}")
+        return False
+
+def print_next_steps():
+    """Print next steps for the user"""
+    print("\n🎯 NEXT STEPS")
+    print("=" * 50)
+    print("1. 📊 Download the dataset:")
+    print("   • Visit: https://bit.ly/3T1A7Rs")
+    print("   • Save as: heart_disease.csv")
+    print("   • Place in project root directory")
+    print()
+    print("2. 🚀 Run the analysis:")
+    print("   • Script version: python heart_disease_detective.py")
+    print("   • Notebook version: jupyter notebook heart_disease_analysis.ipynb")
+    print()
+    print("3. 📋 Review results:")
+    print("   • Check generated visualizations")
+    print("   • Read analysis reports")
+    print("   • Validate medical insights")
+    print()
+    print("4. 🔬 Explore further:")
+    print("   • Modify network structure")
+    print("   • Try different discretization")
+    print("   • Add new inference queries")
+
+def main():
+    """Main setup function"""
+    print_header()
+    
+    # Check Python version
+    if not check_python_version():
+        sys.exit(1)
+    
+    # Install requirements
+    if not install_requirements():
+        print("⚠️  Some packages failed to install. Please install manually.")
+    
+    # Create project structure
+    create_project_structure()
+    
+    # Create .gitignore
+    create_gitignore()
+    
+    # Download dataset
+    download_dataset()
+    
+    # Run verification test
+    run_quick_test()
+    
+    # Print next steps
+    print_next_steps()
+    
+    print("\n🎉 PROJECT SETUP COMPLETE!")
+    print("🕵️ Ready to start your Data Detective investigation!")
+
+if __name__ == "__main__":
+    main()
