@@ -1,0 +1,430 @@
+#!/usr/bin/env python3
+"""
+Heart Disease Risk Prediction using Bayesian Networks
+Data Detective at MediMystery Labs
+
+This script performs comprehensive analysis of heart disease data using
+Bayesian Networks for probabilistic inference.
+"""
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
+from pgmpy.models import BayesianNetwork
+from pgmpy.estimators import MaximumLikelihoodEstimator
+from pgmpy.inference import VariableElimination
+import networkx as nx
+import warnings
+warnings.filterwarnings('ignore')
+
+class HeartDiseaseDetective:
+    """
+    Main class for heart disease risk analysis using Bayesian Networks
+    """
+    
+    def __init__(self, data_path):
+        """Initialize the detective with data path"""
+        self.data_path = data_path
+        self.raw_data = None
+        self.clean_data = None
+        self.normalized_data = None
+        self.model = None
+        self.inference = None
+        
+    def load_data(self):
+        """Load the heart disease dataset"""
+        print("🔍 Loading heart disease data...")
+        try:
+            self.raw_data = pd.read_csv(self.data_path)
+            print(f"✅ Data loaded successfully! Shape: {self.raw_data.shape}")
+            return True
+        except Exception as e:
+            print(f"❌ Error loading data: {e}")
+            return False
+    
+    def explore_data(self):
+        """Explore the dataset structure and characteristics"""
+        print("\n📊 DATA EXPLORATION")
+        print("=" * 50)
+        
+        print(f"Dataset shape: {self.raw_data.shape}")
+        print(f"\nColumn names: {list(self.raw_data.columns)}")
+        print(f"\nData types:\n{self.raw_data.dtypes}")
+        print(f"\nMissing values:\n{self.raw_data.isnull().sum()}")
+        print(f"\nDuplicates: {self.raw_data.duplicated().sum()}")
+        
+        # Display first few rows
+        print(f"\nFirst 5 rows:")
+        print(self.raw_data.head())
+        
+        # Statistical summary
+        print(f"\nStatistical Summary:")
+        print(self.raw_data.describe())
+        
+    def clean_data(self):
+        """Clean the data by removing duplicates and missing values"""
+        print("\n🧹 CLEANING DATA")
+        print("=" * 50)
+        
+        # Start with raw data
+        self.clean_data = self.raw_data.copy()
+        
+        # Remove duplicates
+        initial_rows = len(self.clean_data)
+        self.clean_data = self.clean_data.drop_duplicates()
+        duplicates_removed = initial_rows - len(self.clean_data)
+        print(f"Duplicates removed: {duplicates_removed}")
+        
+        # Drop rows with missing values
+        rows_before = len(self.clean_data)
+        self.clean_data = self.clean_data.dropna()
+        missing_removed = rows_before - len(self.clean_data)
+        print(f"Rows with missing values removed: {missing_removed}")
+        
+        print(f"Final clean dataset shape: {self.clean_data.shape}")
+        
+        # Save cleaned data
+        self.clean_data.to_csv('cleaned_heart_disease.csv', index=False)
+        print("✅ Cleaned data saved as 'cleaned_heart_disease.csv'")
+        
+    def normalize_data(self):
+        """Apply min-max normalization to numeric columns"""
+        print("\n📏 NORMALIZING DATA")
+        print("=" * 50)
+        
+        self.normalized_data = self.clean_data.copy()
+        
+        # Identify numeric columns (excluding target)
+        numeric_columns = self.clean_data.select_dtypes(include=[np.number]).columns.tolist()
+        if 'target' in numeric_columns:
+            numeric_columns.remove('target')
+        
+        print(f"Normalizing columns: {numeric_columns}")
+        
+        # Apply min-max normalization
+        scaler = MinMaxScaler()
+        self.normalized_data[numeric_columns] = scaler.fit_transform(
+            self.clean_data[numeric_columns]
+        )
+        
+        print("✅ Normalization completed")
+        
+        # Save normalized data
+        self.normalized_data.to_csv('normalized_heart_disease.csv', index=False)
+        print("✅ Normalized data saved as 'normalized_heart_disease.csv'")
+        
+    def discretize_for_bayesian(self):
+        """Discretize continuous variables for Bayesian Network"""
+        print("\n🔢 DISCRETIZING VARIABLES FOR BAYESIAN NETWORK")
+        print("=" * 50)
+        
+        # Create discretized version
+        self.discretized_data = self.normalized_data.copy()
+        
+        # Discretize normalized continuous variables into bins
+        continuous_vars = ['age', 'chol', 'thalach']
+        
+        for var in continuous_vars:
+            if var in self.discretized_data.columns:
+                # Create 3 bins: Low, Medium, High
+                self.discretized_data[f'{var}_disc'] = pd.cut(
+                    self.discretized_data[var], 
+                    bins=3, 
+                    labels=['Low', 'Medium', 'High']
+                )
+        
+        # Keep relevant columns for Bayesian Network
+        bayesian_columns = ['age_disc', 'fbs', 'target', 'chol_disc', 'thalach_disc']
+        available_columns = [col for col in bayesian_columns if col in self.discretized_data.columns]
+        
+        self.bayesian_data = self.discretized_data[available_columns].copy()
+        
+        # Rename for simplicity
+        column_mapping = {
+            'age_disc': 'age',
+            'chol_disc': 'chol', 
+            'thalach_disc': 'thalach'
+        }
+        
+        self.bayesian_data = self.bayesian_data.rename(columns=column_mapping)
+        
+        print(f"Discretized data shape: {self.bayesian_data.shape}")
+        print(f"Columns: {list(self.bayesian_data.columns)}")
+        
+        # Save discretized data
+        self.bayesian_data.to_csv('discretized_heart_disease.csv', index=False)
+        print("✅ Discretized data saved")
+        
+    def build_bayesian_network(self):
+        """Build Bayesian Network with predefined structure"""
+        print("\n🕸️ BUILDING BAYESIAN NETWORK")
+        print("=" * 50)
+        
+        # Define the network structure: age → fbs → target → chol, thalach
+        edges = [
+            ('age', 'fbs'),
+            ('fbs', 'target'),
+            ('target', 'chol'),
+            ('target', 'thalach')
+        ]
+        
+        # Filter edges based on available columns
+        available_columns = list(self.bayesian_data.columns)
+        filtered_edges = [
+            (source, target) for source, target in edges 
+            if source in available_columns and target in available_columns
+        ]
+        
+        print(f"Network structure: {filtered_edges}")
+        
+        # Create Bayesian Network
+        self.model = BayesianNetwork(filtered_edges)
+        
+        # Train using Maximum Likelihood Estimation
+        print("Training model using Maximum Likelihood Estimation...")
+        mle = MaximumLikelihoodEstimator(self.model, self.bayesian_data)
+        
+        # Fit the model
+        for node in self.model.nodes():
+            cpd = mle.estimate_cpd(node)
+            self.model.add_cpds(cpd)
+        
+        # Verify model
+        if self.model.check_model():
+            print("✅ Bayesian Network model is valid!")
+        else:
+            print("❌ Model validation failed!")
+            
+        # Initialize inference engine
+        self.inference = VariableElimination(self.model)
+        
+    def visualize_network(self):
+        """Visualize the Bayesian Network structure"""
+        print("\n📈 CREATING NETWORK VISUALIZATION")
+        print("=" * 50)
+        
+        plt.figure(figsize=(12, 8))
+        
+        # Create network graph
+        G = nx.DiGraph()
+        G.add_edges_from(self.model.edges())
+        
+        # Set up the plot
+        pos = nx.spring_layout(G, k=3, iterations=50)
+        
+        # Draw the network
+        nx.draw(G, pos, 
+                with_labels=True, 
+                node_color='lightblue',
+                node_size=3000,
+                font_size=12,
+                font_weight='bold',
+                arrows=True,
+                arrowsize=20,
+                edge_color='gray',
+                arrowstyle='->',
+                connectionstyle='arc3,rad=0.1')
+        
+        plt.title("Heart Disease Bayesian Network Structure", fontsize=16, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig('bayesian_network_structure.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        
+    def perform_inference(self):
+        """Perform probabilistic inference on the trained model"""
+        print("\n🔮 PERFORMING PROBABILISTIC INFERENCE")
+        print("=" * 50)
+        
+        results = {}
+        
+        try:
+            # Query 1: Probability of heart disease given high age
+            if 'age' in self.model.nodes() and 'target' in self.model.nodes():
+                query1 = self.inference.query(
+                    variables=['target'], 
+                    evidence={'age': 'High'}
+                )
+                results['high_age_heart_disease'] = query1
+                print("🎯 P(Heart Disease | High Age):")
+                print(query1)
+                print()
+            
+            # Query 2: Probability distribution of cholesterol given heart disease
+            if 'chol' in self.model.nodes() and 'target' in self.model.nodes():
+                query2 = self.inference.query(
+                    variables=['chol'], 
+                    evidence={'target': 1}
+                )
+                results['chol_given_heart_disease'] = query2
+                print("🎯 P(Cholesterol | Heart Disease = Yes):")
+                print(query2)
+                print()
+                
+            # Query 3: Probability of fasting blood sugar given medium age
+            if 'fbs' in self.model.nodes() and 'age' in self.model.nodes():
+                query3 = self.inference.query(
+                    variables=['fbs'], 
+                    evidence={'age': 'Medium'}
+                )
+                results['fbs_given_medium_age'] = query3
+                print("🎯 P(Fasting Blood Sugar | Medium Age):")
+                print(query3)
+                print()
+                
+            # Query 4: Joint probability of heart disease and high thalach
+            if 'target' in self.model.nodes() and 'thalach' in self.model.nodes():
+                query4 = self.inference.query(
+                    variables=['target', 'thalach']
+                )
+                results['joint_target_thalach'] = query4
+                print("🎯 Joint P(Heart Disease, Thalach):")
+                print(query4)
+                print()
+                
+        except Exception as e:
+            print(f"⚠️ Inference error: {e}")
+            
+        return results
+        
+    def create_inference_visualization(self, results):
+        """Create visualizations for inference results"""
+        print("\n📊 CREATING INFERENCE VISUALIZATIONS")
+        print("=" * 50)
+        
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        axes = axes.ravel()
+        
+        plot_idx = 0
+        
+        for query_name, result in results.items():
+            if plot_idx < 4:
+                # Extract probabilities for plotting
+                variables = result.variables
+                values = result.values.flatten()
+                
+                if len(variables) == 1:
+                    # Single variable query
+                    labels = [f"{variables[0]}={i}" for i in range(len(values))]
+                    axes[plot_idx].bar(labels, values, color='skyblue', alpha=0.7)
+                    axes[plot_idx].set_title(f'{query_name.replace("_", " ").title()}')
+                    axes[plot_idx].set_ylabel('Probability')
+                    axes[plot_idx].tick_params(axis='x', rotation=45)
+                
+                plot_idx += 1
+        
+        # Remove empty subplots
+        for i in range(plot_idx, 4):
+            fig.delaxes(axes[i])
+            
+        plt.tight_layout()
+        plt.savefig('inference_results.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        
+    def generate_report(self):
+        """Generate comprehensive analysis report"""
+        print("\n📋 GENERATING ANALYSIS REPORT")
+        print("=" * 50)
+        
+        report = f"""
+# Heart Disease Risk Analysis Report
+## MediMystery Labs - Data Detective Division
+
+### Dataset Overview
+- **Original Shape**: {self.raw_data.shape}
+- **Clean Shape**: {self.clean_data.shape}
+- **Features**: {list(self.clean_data.columns)}
+
+### Data Quality Assessment
+- **Duplicates Removed**: {len(self.raw_data) - len(self.clean_data) if hasattr(self, 'clean_data') else 0}
+- **Missing Values**: Completely removed
+- **Normalization**: Min-Max scaling applied to numeric features
+
+### Bayesian Network Structure
+- **Edges**: {list(self.model.edges()) if self.model else 'Not built'}
+- **Nodes**: {list(self.model.nodes()) if self.model else 'Not built'}
+
+### Key Findings
+1. **Model Validation**: {'✅ Valid' if self.model and self.model.check_model() else '❌ Invalid'}
+2. **Inference Engine**: {'✅ Ready' if self.inference else '❌ Not initialized'}
+
+### Recommendations
+1. Consider additional feature engineering
+2. Explore different discretization strategies
+3. Validate results with medical experts
+4. Implement cross-validation for model assessment
+
+---
+Generated by Heart Disease Detective System
+        """
+        
+        with open('analysis_report.md', 'w') as f:
+            f.write(report)
+            
+        print("✅ Report saved as 'analysis_report.md'")
+        
+    def run_complete_analysis(self):
+        """Run the complete analysis pipeline"""
+        print("🕵️ STARTING HEART DISEASE DETECTIVE ANALYSIS")
+        print("=" * 60)
+        
+        # Step 1: Load data
+        if not self.load_data():
+            return False
+            
+        # Step 2: Explore data
+        self.explore_data()
+        
+        # Step 3: Clean data
+        self.clean_data()
+        
+        # Step 4: Normalize data
+        self.normalize_data()
+        
+        # Step 5: Discretize for Bayesian Network
+        self.discretize_for_bayesian()
+        
+        # Step 6: Build Bayesian Network
+        self.build_bayesian_network()
+        
+        # Step 7: Visualize network
+        self.visualize_network()
+        
+        # Step 8: Perform inference
+        results = self.perform_inference()
+        
+        # Step 9: Create visualizations
+        if results:
+            self.create_inference_visualization(results)
+        
+        # Step 10: Generate report
+        self.generate_report()
+        
+        print("\n🎉 ANALYSIS COMPLETE!")
+        print("=" * 60)
+        print("Files generated:")
+        print("- cleaned_heart_disease.csv")
+        print("- normalized_heart_disease.csv") 
+        print("- discretized_heart_disease.csv")
+        print("- bayesian_network_structure.png")
+        print("- inference_results.png")
+        print("- analysis_report.md")
+        
+        return True
+
+def main():
+    """Main execution function"""
+    # Initialize the detective
+    detective = HeartDiseaseDetective('heart_disease.csv')
+    
+    # Run complete analysis
+    success = detective.run_complete_analysis()
+    
+    if success:
+        print("\n✅ Heart Disease Detective Analysis Completed Successfully!")
+    else:
+        print("\n❌ Analysis failed. Please check the data file and try again.")
+
+if __name__ == "__main__":
+    main()
