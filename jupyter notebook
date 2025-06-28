@@ -1,0 +1,116 @@
+# Heart Disease Risk Prediction - Jupyter Notebook Version
+# MediMystery Labs Data Detective Project
+
+# Cell 1: Import libraries and setup
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
+from pgmpy.models import BayesianNetwork
+from pgmpy.estimators import MaximumLikelihoodEstimator
+from pgmpy.inference import VariableElimination
+import networkx as nx
+import warnings
+warnings.filterwarnings('ignore')
+
+print("🕵️ Heart Disease Detective - Jupyter Notebook Analysis")
+print("=" * 60)
+
+# Cell 2: Load and explore data
+print("🔍 Loading heart disease data...")
+df = pd.read_csv('heart_disease.csv')
+print(f"✅ Data loaded! Shape: {df.shape}")
+
+print("\n📊 Dataset Overview:")
+print(f"Columns: {list(df.columns)}")
+print(f"Missing values:\n{df.isnull().sum()}")
+print(f"Duplicates: {df.duplicated().sum()}")
+
+df.head()
+
+# Cell 3: Data cleaning
+print("\n🧹 Cleaning data...")
+# Remove duplicates
+initial_rows = len(df)
+df_clean = df.drop_duplicates()
+print(f"Duplicates removed: {initial_rows - len(df_clean)}")
+
+# Remove missing values
+df_clean = df_clean.dropna()
+print(f"Final shape: {df_clean.shape}")
+
+# Cell 4: Data normalization
+print("\n📏 Normalizing numeric columns...")
+df_normalized = df_clean.copy()
+
+# Get numeric columns (exclude target)
+numeric_cols = df_clean.select_dtypes(include=[np.number]).columns.tolist()
+if 'target' in numeric_cols:
+    numeric_cols.remove('target')
+
+# Apply min-max scaling
+scaler = MinMaxScaler()
+df_normalized[numeric_cols] = scaler.fit_transform(df_clean[numeric_cols])
+print(f"Normalized columns: {numeric_cols}")
+
+# Cell 5: Discretization for Bayesian Network
+print("\n🔢 Discretizing variables...")
+df_discrete = df_normalized.copy()
+
+# Discretize key variables into bins
+continuous_vars = ['age', 'chol', 'thalach']
+for var in continuous_vars:
+    if var in df_discrete.columns:
+        df_discrete[f'{var}_disc'] = pd.cut(
+            df_discrete[var], 
+            bins=3, 
+            labels=['Low', 'Medium', 'High']
+        )
+
+# Prepare data for Bayesian Network
+bayesian_cols = ['age_disc', 'fbs', 'target', 'chol_disc', 'thalach_disc']
+available_cols = [col for col in bayesian_cols if col in df_discrete.columns]
+df_bayesian = df_discrete[available_cols].copy()
+
+# Rename for simplicity
+df_bayesian = df_bayesian.rename(columns={
+    'age_disc': 'age',
+    'chol_disc': 'chol',
+    'thalach_disc': 'thalach'
+})
+
+print(f"Bayesian data shape: {df_bayesian.shape}")
+print(f"Columns: {list(df_bayesian.columns)}")
+
+# Cell 6: Build Bayesian Network
+print("\n🕸️ Building Bayesian Network...")
+
+# Define network structure: age → fbs → target → chol, thalach
+edges = [
+    ('age', 'fbs'),
+    ('fbs', 'target'), 
+    ('target', 'chol'),
+    ('target', 'thalach')
+]
+
+# Filter edges based on available columns
+available_edges = [
+    (source, target) for source, target in edges
+    if source in df_bayesian.columns and target in df_bayesian.columns
+]
+
+print(f"Network edges: {available_edges}")
+
+# Create and train the model
+model = BayesianNetwork(available_edges)
+mle = MaximumLikelihoodEstimator(model, df_bayesian)
+
+# Fit CPDs
+for node in model.nodes():
+    cpd = mle.estimate_cpd(node)
+    model.add_cpds(cpd)
+
+# Validate model
+if model.check_model():
+    print("✅
